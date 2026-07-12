@@ -1,38 +1,62 @@
+import logging
 import sys
+import logging
 
-from enums import Game_version, Player_runtime_rig_version, Export_target
-from cli_parser import parse_cli_args
-from binary_animation_parser import parse_animation_file
-from animation_export import export_animation
+from cli.cli_parser import parse_cli_args
+from tag_readers.read_animation import read_animation, Animation_Data
+from animation_decoding.decode_animation import decode_animation, Bone_Tracks
+from animation_export.export_animation import export_animation
+from parser_log_functions import log_animation_header, log_codec_header, log_runtime_rig_components
 
-def read_file(in_filename, game_version, out_filename, json_indent, target):
-	with open(in_filename, "rb") as file_desc:
-		animation = parse_animation_file(file_desc, game_version)
 
-	if animation is None:
-		print("Error // Animation was not parsed")
-		sys.exit(5)
+logger = logging.getLogger(__name__)
 
-	export_animation(
-		target,
-		animation["animation_data"],
-		animation["bone_data"],
-		game_version,
-		out_filename or in_filename,
-		json_indent
-	)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(name)s - %(levelname)s - %(message)s'
+)
+
+
+def read_file(options):
+	try:
+		with open(options.clip, "rb") as file_desc:
+			animation: Animation_Data = read_animation(file_desc, options.version)
+			tracks: list[Bone_Tracks] = decode_animation(animation)
+
+		log_animation_header(animation.animation_header)
+
+		if animation.static_bones_header is not None:
+			log_codec_header(animation.static_bones_header, "Static")
+		else:
+			logger.info("No static bones header")
+
+		if animation.animated_bones_header is not None:
+			log_codec_header(animation.animated_bones_header, "Animated")
+		else:
+			logger.info("No animated bones header")
+
+		log_runtime_rig_components(animation.runtime_rig_components)
+
+		if animation is not None:
+			export_animation(animation, tracks, options)
+		else:
+			logger.info("Animation was not parsed")
+
+	except Exception as e:
+		logger.critical(e)
+
+
 
 if __name__ == "__main__":
-	args = sys.argv[1:]
+	try:
+		options = parse_cli_args()
 
-	options = parse_cli_args(args)
+		read_file(options)
 
-	read_file(
-		options['selected_file'],
-		options['selected_game_version'],
-		options['selected_output_file'],
-		options['selected_json_indent'],
-		options['selected_target']
-	)
-
-	sys.exit(0)
+		sys.exit(0)
+	except FileNotFoundError as e:
+		print(e)
+		sys.exit(1)
+	except PermissionError as e:
+		print(e)
+		sys.exit(1)

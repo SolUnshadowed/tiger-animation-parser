@@ -1,13 +1,14 @@
 import sys
 
-class Console_progress_bar:
+
+class Console_Progress_Bar:
 	def __init__(self, total, bar_length=40, on_finish=None):
 		self.total = total
 		self.current = 0
 		self.bar_length = bar_length
 		self.on_finish = on_finish
 
-	def step(self, amount = 1):
+	def step(self, amount=1):
 		self.current += amount
 		progress = min(self.current / self.total, 1.0)
 
